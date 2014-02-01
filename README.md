@@ -25,7 +25,7 @@ Note: this does not handle unexpected deaths of the process after the pid file w
 
 ## Example:
 
-    steward\_process:execute("list", "ls", [{1, "list.stdout"},{2, "list.stderr"}], ".", 5000, fun(L,T,A) -> ok end).
+    steward_process:execute("list", "ls", [{1, "list.stdout"},{2, "list.stderr"}], ".", 5000, fun(L,T,A) -> ok end).
 
 This runs the command "ls" in the current directory by first writing a "list.sh" file which contains the appropriate commands to route standard output/error streams and creates the ''list.pid'' file upon start.  When "ls" exits, a ''list.exitcode'' file is created, which will contain the exit code (0 on success) and the unix timestamp of the termination time.  The last argument is a logging function which receives arguments logging level (one of info,warn,error), the message format and arguments (in the sense of io\_lib:format).
 
@@ -41,7 +41,7 @@ When a job is submitted a _TaskId.submit_ file is created with the job id in the
 
 ## Example
 
-    steward\_job:execute("wrf", "/opt/wrf-3.4/WRFV3/main/wrf.exe", "/home/workspace",12,16,6,fun(L,T,A) -> ok end).
+    steward_job:execute("wrf", "/opt/wrf-3.4/WRFV3/main/wrf.exe", "/home/workspace",12,16,6,fun(L,T,A) -> ok end).
 
 This will queue a wrf job that will ask for 12 nodes, 16 cpus per node and 6 hrs of walltime.
 If the system using steward is restarted and this function is called again while the job is either queued or running, it will enter the appropriate state and continue waiting for termination.
