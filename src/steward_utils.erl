@@ -1,11 +1,11 @@
 
 
--module(stewtils).
+-module(steward_utils).
 -author("Martin Vejmelka <vejmelkam@gmail.com>").
 -export([file_read_ints_robust/2,start_monitoring/5,wait_for_completion/1,
-         make_std_output_spec/2,write_run_script/2,make_proc_file_path/3,
+         make_std_output_spec/2,make_proc_file_path/3,
          make_proc_names/3,read_exitcode_file/1,read_pid_file/1,wait_for_file/3,
-         seconds_elapsed_from/1]).
+         seconds_elapsed_from/1,unix_to_datetime/1]).
 
 
 seconds_between(From,To) ->
@@ -105,11 +105,6 @@ make_proc_names(InDir,TaskId,Suffixes) ->
 
 remove_execution_files(InDir,TaskId) ->
   lists:map(fun file:delete/1, make_proc_names(InDir, TaskId, [".pid", ".exitcode", ".submit"])).
-
-
-write_run_script(Path,Content) ->
-  file:write_file(Path,Content),
-  file:change_mode(Path, 448).   % 448_10 == 700 in octal
 
 
 process_kill(TaskId,OsPid,QueueId,LogF) ->

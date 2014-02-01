@@ -2,7 +2,7 @@
  [
    {description, "External process/job execution manager for Erlang."},
    {vsn, "1.0"},
-   {modules, [stewtils,stewproc]},
+   {modules, [steward_utils,steward_process,steward_job]},
    {registered, []},
    {applications, [kernel,stdlib,sasl]},
    {included_applications, []},
