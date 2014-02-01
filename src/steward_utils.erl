@@ -3,7 +3,7 @@
 -module(steward_utils).
 -author("Martin Vejmelka <vejmelkam@gmail.com>").
 -export([file_read_ints_robust/2,start_monitoring/5,wait_for_completion/1,
-         make_std_output_spec/2,make_proc_file_path/3,
+         make_std_output_spec/2,make_proc_file_path/3,remove_execution_files/2,
          make_proc_names/3,read_exitcode_file/1,read_pid_file/1,wait_for_file/3,
          seconds_elapsed_from/1,unix_to_datetime/1]).
 

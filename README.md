@@ -1,14 +1,14 @@
 steward
 =======
 
-Steward implements a state machine approach to executing external processes or batch jobs (via either PBS or SGE).  The state of the processes is tracked via a set of files store on the filesystem.  The idea is for the state of the executed processes or batch jobs to survive outages, crashes or restarts of the coordinating system.  This is useful for tracking long-running processes.
+Steward implements a state machine approach to executing external processes or batch jobs (via either PBS or SGE).  The state of the processes is tracked via a set of files stored on the filesystem.  The idea is for the state of the computations to survive outages, crashes or restarts of the coordinating system.
 
-Steward is useful if jobs are run on a shared filesystem, i.e. it has access to the run directories or as a component of a workflow system where the state of a complex chain of computations must be tracked.
+Steward is useful if long-running jobs are run on a shared filesystem, i.e. it has access to the run directories.  Another use-case is as a component of a workflow system where the state of a complex chain of computations must be tracked and plans may be restarted and only some of the computations are to be redone.
 
 
 ### Concept
 
-Each process/job has a TaskId which identifies it for the steward library.  The steward library then creates during the lifetime of the process/job a set of files which encode the current state of the job.  If the program running the steward library is restarted at any time and the processes/jobs are re-executed, steward will detect whether the job is already submitted/running/terminated.
+Each process/job has a TaskId which identifies it for the steward library.  The steward library then creates during the lifetime of the process/job a set of files which encode the current state of the process/job.  If the program running the steward library is restarted at any time and the processes/jobs are re-executed, steward will detect whether the process/job is already submitted/running/terminated and react appropriately.
 
 ### Processes
 
