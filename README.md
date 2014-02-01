@@ -5,6 +5,11 @@ Steward implements a state machine approach to executing external processes or b
 
 Steward is useful if long-running jobs are run on a shared filesystem, i.e. it has access to the run directories.  Another use-case is as a component of a workflow system where the state of a complex chain of computations must be tracked and plans may be restarted and only some of the computations are to be redone.
 
+## Assumptions
+
+  * ''bash'' is available
+  * the queuing system is either PBS or SGE and the ````qsub````
+
 
 ### Concept
 
@@ -16,9 +21,9 @@ The state machine of a process executed immediately (not using a batch system) i
 
     Not started yet -> running -> terminated.
 
-When the process is started a _TaskId.pid_ file is generated and store in the run directory containing two integers, the OS pid and a unix timestamp of when the process was started.  When the process terminates a _TaskId.exitcode_ file is generated containing the exit code of the process and the time of termination.
+When the process is started a ````TaskId.pid```` file is generated and store in the run directory containing two integers, the OS pid and a unix timestamp of when the process was started.  When the process terminates a ````TaskId.exitcode```` file is generated containing the exit code of the process and the time of termination.
 
-The way the persistence works is if a steward\_process:execute function is called and finds the exitcode, it returns immediately with the exit code read from the file.  If there is no exit code file but there is a pid file, then the process must still be running and the library computes from the start time in the file how much more time is left for the process until termination and begins tracking it.  If there is not even a pid file then the process is restarted.
+The way the persistence works is if a ````steward_process:execute```` function is called and finds the exitcode, it returns immediately with the exit code read from the file.  If there is no exit code file but there is a pid file, then the process must still be running and the library computes from the start time in the file how much more time is left for the process until termination and begins tracking it.  If there is not even a pid file then the process is restarted.
 
 Note: this does not handle unexpected deaths of the process after the pid file was written.  Currently if this happens, steward will wait until it hits the timeout and then returns with a {failure, timeout} message.  This a TODO item but not trivial as the process may run on another machine.
 
