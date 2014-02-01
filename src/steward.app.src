@@ -1,0 +1,10 @@
+{application, steward,
+ [
+   {description, "External process/job execution manager for Erlang."},
+   {vsn, "1.0"},
+   {modules, [stewtils,stewproc]},
+   {registered, []},
+   {applications, [kernel,stdlib,sasl]},
+   {included_applications, []},
+   {env, []}
+]}.
