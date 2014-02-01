@@ -163,20 +163,20 @@ monitor_process(MasterPid,InDir,TaskId,OsPid,QueueId,TimeoutMS,LogF) ->
 
 start_monitoring(InDir,TaskId,QueueId,TimeoutMS,LogF) ->
   S = self(),
-  spawn(fun() -> S ! {proc_complete, self(), monitor_process(S,InDir,TaskId,undefined,QueueId,TimeoutMS,LogF)} end).
+  spawn(fun() -> S ! {proc_terminated, self(), monitor_process(S,InDir,TaskId,undefined,QueueId,TimeoutMS,LogF)} end).
 
 
 % A reference implementation of the wait method that handles monitor_process messages
 % All implementations must handle the following messages:
-% {proc_started, Pid, StartedWhen}, {proc_complete, Pid, Result} and {kill, Reason}
-% additionally, the {kill,Reason} must be passed on to the process handling the monitoring
-% if it is to have any effect.
+% {proc_started, Pid, StartedWhen}, {proc_terminated, Pid, Result}.
+% wait_for_completion also forwards {kill, Reason} to the monitor so the external process can be killed
+% by sending a message to the invoking process.
 %
 wait_for_completion(MonPid) ->
   receive
     {proc_started,MonPid,_} ->
       wait_for_completion(MonPid);
-    {proc_complete,MonPid,Result} ->
+    {proc_terminated,MonPid,Result} ->
       Result;
     % the kill message is expected to come from another process that needs to stop the computation
     {kill, Reason} ->

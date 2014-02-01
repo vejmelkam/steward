@@ -5,6 +5,8 @@ Steward implements a state machine approach to executing external processes or b
 
 Steward is useful if long-running jobs are run on a shared filesystem, i.e. it has access to the run directories.  Another use-case is as a component of a workflow system where the state of a complex chain of computations must be tracked and plans may be restarted and only some of the computations are to be redone.
 
+The jobs can be killed and steward will send a ````SIGKILL```` using ````kill```` for a process or invoke ````qdel```` (available on both PBS and SGE) with the scheduler job id to remove the job.
+
 ## Assumptions
 
   * ''bash'' is available
@@ -50,6 +52,18 @@ When a job is submitted a _TaskId.submit_ file is created with the job id in the
     steward_job:execute("wrf", "/opt/wrf-3.4/WRFV3/main/wrf.exe", "/home/workspace",12,16,6,fun(L,T,A) -> ok end).
 
 This will queue a wrf job that will ask for 12 nodes, 16 cpus per node and 6 hrs of walltime.  If the system using steward is restarted and this function is called again while the job is either queued or running, it will enter the appropriate state and continue waiting for termination.
+
+
+
+### Communication with the master process
+
+After an appropriate ````execute```` function is invoked, steward will send messages to the invoking process:
+
+  * ````{proc_started, MonitorPid, StartTime}```` when the process starts
+  * ````{proc_terminated, MonitorPid, Result}```` when the process terminates or time limit is reached, Result is one of the following
+    * ````{success, ExitCode}```` when process terminates within time limit
+    * ````{failure, timeout}```` when the process times out
+    * ````{killed, Reason}```` when a ````{kill,Reason}```` message is sent to the monitor
 
 
 ### Clearing computation state
