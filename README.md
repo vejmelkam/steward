@@ -51,6 +51,16 @@ When a job is submitted a _TaskId.submit_ file is created with the job id in the
 
 This will queue a wrf job that will ask for 12 nodes, 16 cpus per node and 6 hrs of walltime.  If the system using steward is restarted and this function is called again while the job is either queued or running, it will enter the appropriate state and continue waiting for termination.
 
+
+### Clearing computation state
+
+The function call
+
+    steward_utils:remove_execution_files(".","list")
+
+will remove all the execution files used by steward and ensure that next time the ````list```` task is invoked in the current directory (see above for example), it will be rerun again.
+
+
 ### TODO
   * check whether a process with the OS pid is running if a pid file is found, solve this for remote executions
   * add explicit queue parameter to batch jobs
