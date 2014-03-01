@@ -5,7 +5,7 @@
 -export([execute/10]).
 
 read_submit_file(Path) ->
-  case steward_utils:read_ints_from_file(Path) of
+  case steward_utils:file_read_ints(Path,2) of
     [QueueId,UnixTS] ->
       {QueueId,steward_utils:unix_to_datetime(UnixTS)};
     {error,_} ->
