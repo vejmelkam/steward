@@ -15,7 +15,7 @@ read_submit_file(Path) ->
 
 begin_monitoring(InDir,TaskId,QueueId,PidTimeoutMS,TimeoutMS,LogF) ->
   PidPath = steward_utils:make_proc_file_path(InDir,TaskId,".pid"),
-  Pid = steward_utils:begin_monitoring(InDir,TaskId,QueueId,TimeoutMS,LogF),
+  Pid = steward_utils:start_monitoring(InDir,TaskId,QueueId,TimeoutMS,LogF),
   spawn(fun () -> Pid ! {pid_msg, steward_utils:wait_for_file(PidPath,PidTimeoutMS,500)} end),
   {running,Pid,QueueId}.
 
