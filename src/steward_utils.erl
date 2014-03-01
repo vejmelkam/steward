@@ -5,7 +5,7 @@
 -export([file_read_ints/2,file_read_ints_robust/2,start_monitoring/5,wait_for_completion/1,
          make_std_output_spec/2,make_proc_file_path/3,remove_execution_files/2,
          make_proc_names/3,read_exitcode_file/1,read_pid_file/1,wait_for_file/3,
-         seconds_elapsed_from/1,unix_to_datetime/1,write_run_script/2]).
+         seconds_elapsed_from/1,unix_to_datetime/1,unix_timestamp/0,write_run_script/2]).
 
 
 seconds_between(From,To) ->
@@ -16,9 +16,15 @@ seconds_between(From,To) ->
 seconds_elapsed_from(From) ->
   seconds_between(From, calendar:local_time()).
 
+
 unix_to_datetime(Unix) ->
   GMT = calendar:gregorian_seconds_to_datetime(Unix + 719528 * 86400),
   calendar:universal_time_to_local_time(GMT).
+
+
+unix_timestamp() ->
+  UTC = calendar:universal_time(),
+  calendar:datetime_to_gregorian_seconds(UTC) - 719528 * 86400.
 
 
 wait_for_file(Path,TimeoutMS,WaitMS) ->
