@@ -89,7 +89,7 @@ execute(TaskId,Cmd,InDir,NumNodes,ProcPerNode,WallTimeHrs,PidTimeoutS,TimeoutS,B
               begin_monitoring(InDir,TaskId,QueueId,RemPidTimeoutS*1000,TimeoutS*1000,LogF);
             invalid ->
               JS = build_job_script(TaskId,InDir,Cmd,NumNodes,ProcPerNode,WallTimeHrs,Backend),
-              write_run_script(steward_utils:make_proc_file_path(InDir,Cmd,".sh"),JS),
+              write_run_script(steward_utils:make_proc_file_path(InDir,TaskId,".sh"),JS),
               QidLine = lists:flatten(os:cmd(lists:flatten(["cd ",InDir," && qsub ",TaskId,".sh"]))),
               QueueId = strip_qid(QidLine),
               file:write_file(SubmitPath,io_lib:format("~p~n~p~n", [QueueId,steward_utils:unix_timestamp()])),
