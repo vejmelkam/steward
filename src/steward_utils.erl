@@ -1,5 +1,4 @@
 
-
 -module(steward_utils).
 -author("Martin Vejmelka <vejmelkam@gmail.com>").
 -export([file_read_ints/2,file_read_ints_robust/2,start_monitoring/5,wait_for_completion/1,
@@ -8,10 +7,16 @@
          seconds_elapsed_from/1,unix_to_datetime/1,unix_timestamp/0,write_run_script/2]).
 
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
+
 seconds_between(From,To) ->
   FromS = calendar:datetime_to_gregorian_seconds(From),
   ToS = calendar:datetime_to_gregorian_seconds(To),
   ToS - FromS.
+
 
 seconds_elapsed_from(From) ->
   seconds_between(From, calendar:local_time()).
@@ -42,14 +47,29 @@ wait_for_file(Path,TimeoutMS,WaitMS) ->
   end.
 
 
+convert_maybe_integer(L0) ->
+  L = string:strip(L0),
+  case string:to_integer(L) of
+    {I,[]} ->
+      [I];
+    _ ->
+      []
+  end.
+
 
 file_read_ints(File,Count) ->
   case file:read_file(File) of
-    {ok, D} ->
-      T = string:tokens(binary_to_list(D), " \n"),
+    {ok, B} ->
+      T = string:tokens(binary_to_list(B), " \n"),
       case length(T) of
         Count ->
-          lists:map(fun (S) -> list_to_integer(string:strip(S)) end, T);
+          Res = lists:flatten(lists:map(fun convert_maybe_integer/1, T)),
+          case length(Res) of
+            Count ->
+              Res;
+            WrongCount ->
+              {error, {int_count, WrongCount}}
+          end;
         WrongCount ->
           {error, {int_count, WrongCount}}
         end;
@@ -102,12 +122,15 @@ read_exitcode_file(Path) ->
 make_proc_file_path(InDir,TaskId,Suffix) ->
   filename:join(InDir, TaskId ++ Suffix).
 
+
 make_std_output_spec(InDir,TaskId) ->
   [{1, make_proc_file_path(InDir, TaskId, ".stdout")},
    {2, make_proc_file_path(InDir, TaskId, ".stderr")}].
 
+
 make_proc_names(InDir,TaskId,Suffixes) ->
   lists:map(fun(S) -> make_proc_file_path(InDir,TaskId,S) end, Suffixes).
+
 
 remove_execution_files(InDir,TaskId) ->
   lists:map(fun file:delete/1, make_proc_names(InDir, TaskId, [".pid", ".exitcode", ".submit"])).
@@ -195,4 +218,42 @@ wait_for_completion(MonPid) ->
       wait_for_completion(MonPid)
   end.
 
+
+
+-ifdef(TEST).
+
+seconds_between_test() ->
+  150 = seconds_between({{2014,1,1},{0,0,0}},{{2014,1,1},{0,2,30}}).
+
+make_proc_file_path1_test() ->
+  "/home/test/task_name.suffix" = make_proc_file_path("/home/test", "task_name", ".suffix").
+
+make_proc_file_path2_test() ->
+  "/home/test/task_name.suffix" = make_proc_file_path("/home/test/", "task_name", ".suffix").
+
+make_std_output_spec_test() ->
+  [{1, "/home/test/task.stdout"},{2,"/home/test/task.stderr"}] = make_std_output_spec("/home/test","task").
+
+
+file_read_ints1_test() ->
+  {error, _} = file_read_ints("tmp/nonexistent_file", 1).
+
+
+file_read_ints2_test() ->
+  ok = file:write_file("ints_test","hello\n"),
+  {error, _} = file_read_ints("ints_test", 1).
+
+
+file_read_ints3_test() ->
+  ok = file:write_file("ints_test","1234\n4567 \n8910"),
+  {error, {int_count,3}} = file_read_ints("ints_test",2),
+  [1234,4567,8910] = file_read_ints("ints_test",3),
+  file:delete("ints_test").
+
+
+file_read_ints4_test() ->
+  ok = file:write_file("ints_test","1234\n 4567aa \n8910"),
+  {error, {int_count,2}} = file_read_ints("ints_test",3).
+
+-endif.
 
