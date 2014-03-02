@@ -24,12 +24,13 @@ begin_monitoring(InDir,TaskId,QueueId,PidTimeoutMS,TimeoutMS,LogF) ->
   spawn(fun () -> Pid ! {pid_msg, steward_utils:wait_for_file(PidPath,PidTimeoutMS,500)} end),
   {running,Pid,QueueId}.
 
-build_job_script(TaskId,InDir,Cmd,_NumNodes,_ProcPerNode,_WallTimeHrs,null) ->
+build_job_script(TaskId,InDir,Cmd,NumNodes,ProcPerNode,_WallTimeHrs,null) ->
+  NP = NumNodes*ProcPerNode,
   lists:flatten([
     "#!/usr/bin/env bash\n",
     "cd ",InDir,"\n",
     "TID=",TaskId,"\n",
-    Cmd," &\n",
+    "mpiexec -np ", integer_to_list(NP), " ", Cmd," &\n",
     "PID=$!\n",
     "echo $PID `date +%s` > $TID.pid\n",
     "wait $PID\n",
