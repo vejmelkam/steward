@@ -38,7 +38,7 @@ execute(TaskId,Cmd,OutSpec,InDir,TimeoutS,LogF) ->
       LogF(info, "~s: exit code not found, looking for pid file ~s", [TaskId,PidPath]),
       case steward_utils:read_pid_file(PidPath) of
         {OsPid,StartTime} ->
-          RemTimeoutS = TimeoutS - stewutils:seconds_elapsed_from(StartTime),
+          RemTimeoutS = TimeoutS - steward_utils:seconds_elapsed_from(StartTime),
           LogF(info, "~s: found pid file with pid ~p, process started on ~w, waiting for another ~p s.",
                [TaskId,OsPid,StartTime,RemTimeoutS]),
           begin_monitoring(InDir,TaskId,RemTimeoutS,LogF);
