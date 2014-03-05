@@ -41,7 +41,7 @@ execute(TaskId,Cmd,OutSpec,InDir,TimeoutS,LogF) ->
           RemTimeoutS = TimeoutS - steward_utils:seconds_elapsed_from(StartTime),
           LogF(info, "~s: found pid file with pid ~p, process started on ~w, waiting for another ~p s.",
                [TaskId,OsPid,StartTime,RemTimeoutS]),
-          begin_monitoring(InDir,TaskId,RemTimeoutS,LogF);
+          begin_monitoring(InDir,TaskId,RemTimeoutS*1000,LogF);
         invalid ->
           LogF(info, "~s: no pid file found, process ~p is being started now at ~w", [TaskId,Cmd,calendar:local_time()]),
           FQN = steward_utils:make_proc_file_path(InDir,TaskId,".sh"),
