@@ -89,7 +89,7 @@ build_job_script(Args,sge) ->
   PostLines = proplists:get_value(jobscript_post_mpiexec, Args, []),
   NP = NumNodes*ProcPerNode,
   lists:flatten([
-     "#!/usr/bin/env bash\n",
+     "#$ -S /bin/bash\n",
      "#$ -N ",TaskId,"\n",
      "#$ -wd ",InDir,"\n",
      "#$ -l h_rt=",integer_to_list(WallTimeHrs),":00:00\n",
