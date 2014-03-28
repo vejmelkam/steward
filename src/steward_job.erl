@@ -2,7 +2,7 @@
 
 -module(steward_job).
 -author("Martin Vejmelka <vejmelkam@gmail.com>").
--export([execute/10]).
+-export([execute/2,check_missing_args/1]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -24,34 +24,59 @@ begin_monitoring(InDir,TaskId,QueueId,PidTimeoutMS,TimeoutMS,LogF) ->
   spawn(fun () -> Pid ! {pid_msg, steward_utils:wait_for_file(PidPath,PidTimeoutMS,500)} end),
   {running,Pid,QueueId}.
 
-build_job_script(TaskId,InDir,Cmd,NumNodes,ProcPerNode,_WallTimeHrs,null) ->
+
+build_job_script(Args,null) ->
+  NumNodes = proplists:get_value(num_nodes, Args),
+  ProcPerNode = proplists:get_value(proc_per_node, Args),
+  InDir = proplists:get_value(in_dir, Args),
+  TaskId = proplists:get_value(task_id, Args),
+  Cmd = proplists:get_value(cmd, Args),
+  MpiPath = proplists:get_value(mpi_path, Args),
+  MpiExtraParams = proplists:get_value(mpi_extra_params, Args, []),
   NP = NumNodes*ProcPerNode,
   lists:flatten([
     "#!/usr/bin/env bash\n",
     "cd ",InDir,"\n",
     "TID=",TaskId,"\n",
-    "mpiexec -np ", integer_to_list(NP), " ", Cmd," &\n",
+    MpiPath, " ", MpiExtraParams, " -np ", integer_to_list(NP), " ", Cmd," &\n",
     "PID=$!\n",
     "echo $PID `date +%s` > $TID.pid\n",
     "wait $PID\n",
     "echo $? `date +%s` > $TID.exitcode\n"]);
 
 
-build_job_script(TaskId,InDir,Cmd,NumNodes,ProcPerNode,WallTimeHrs,pbs) ->
+build_job_script(Args,pbs) ->
+  NumNodes = proplists:get_value(num_nodes, Args),
+  ProcPerNode = proplists:get_value(proc_per_node, Args),
+  InDir = proplists:get_value(in_dir, Args),
+  TaskId = proplists:get_value(task_id, Args),
+  Cmd = proplists:get_value(cmd, Args),
+  MpiPath = proplists:get_value(mpi_path, Args),
+  MpiExtraParams = proplists:get_value(mpi_extra_params, Args, []),
+  WallTimeHrs = proplists:get_value(wall_time_hrs, Args),
+  NP = NumNodes * ProcPerNode,
   lists:flatten([
     "#!/usr/bin/env bash\n",
     io_lib:format("#PBS -l nodes=~p:ppn=~p\n", [NumNodes,ProcPerNode]),
     io_lib:format("#PBS -l walltime=~p:00:00\n", [WallTimeHrs]),
-    "#PBS -N i", TaskId, "\n",
+    "#PBS -N ", TaskId, "\n",
     "TID=",TaskId,"\n",
     "cd ",InDir,"\n",
-    io_lib:format("mpirun -np ~p ~s &\n", [NumNodes*ProcPerNode,Cmd]),
+    MpiPath, " ", MpiExtraParams, " -np ", integer_to_list(NP), " ", Cmd, " &\n",
     "PID=$!\n",
     "echo $PID `date +%s` > $TID.pid\n",
     "wait $PID\n",
     "echo $? `date +%s` > $TID.exitcode\n"]);
 
-build_job_script(TaskId,InDir,Cmd,NumNodes,ProcPerNode,WallTimeHrs,oge) ->
+build_job_script(Args,sge) ->
+  NumNodes = proplists:get_value(num_nodes, Args),
+  ProcPerNode = proplists:get_value(proc_per_node, Args),
+  InDir = proplists:get_value(in_dir, Args),
+  TaskId = proplists:get_value(task_id, Args),
+  Cmd = proplists:get_value(cmd, Args),
+  MpiPath = proplists:get_value(mpi_path, Args),
+  MpiExtraParams = proplists:get_value(mpi_extra_params, Args, []),
+  WallTimeHrs = proplists:get_value(wall_time_hrs, Args),
   NP = NumNodes*ProcPerNode,
   lists:flatten([
      "#!/usr/bin/env bash\n",
@@ -60,16 +85,16 @@ build_job_script(TaskId,InDir,Cmd,NumNodes,ProcPerNode,WallTimeHrs,oge) ->
      "#$ -l h_rt=",integer_to_list(WallTimeHrs),":00:00\n",
      "#$ -pe mpi ",integer_to_list(NP),"\n",
      "TID=",TaskId,"\n",
-     "cp $PE_HOSTFILE pe_hostfile\n"
-     "awk '{for (i=1;i<=$2;i++) print $1}' pe_hostfile > machinefile\n"
-     "mpirun --mca plm_rsh_disable_qrsh 1 -np ",integer_to_list(NP)," -machinefile machinefile ",Cmd," &\n",
+     "cp $PE_HOSTFILE pe_hostfile\n",
+     "awk '{for (i=1;i<=$2;i++) print $1}' pe_hostfile > machinefile\n",
+     MpiPath," ",MpiExtraParams," -np ",integer_to_list(NP)," -machinefile machinefile ",Cmd," &\n",
      "PID=$!\n",
      "echo $PID `date +%s` > $TID.pid\n",
      "wait $PID\n",
      "echo $? `date +%s` > $TID.exitcode\n" ]).
 
 
-strip_qid(QidLine) ->
+strip_qid(QidLine,_Backend) ->
   case re:run(QidLine, "([0-9]+)", [{capture,first,list}]) of
     {match, [QidStr]} ->
       list_to_integer(QidStr);
@@ -80,17 +105,29 @@ strip_qid(QidLine) ->
 
 submit_job(InDir,TaskId,pbs) ->
   QidLine = lists:flatten(os:cmd(lists:flatten(["cd ",InDir," && qsub ",TaskId,".sh"]))),
-  strip_qid(QidLine);
-submit_job(InDir,TaskId,oge) ->
+  strip_qid(QidLine,pbs);
+submit_job(InDir,TaskId,sge) ->
   QidLine = lists:flatten(os:cmd(lists:flatten(["cd ",InDir," && qsub ",TaskId,".sh"]))),
-  strip_qid(QidLine);
+  strip_qid(QidLine,sge);
 submit_job(InDir,TaskId,null) ->
   % simulates submission by delaying the execution of the task script by 2 seconds
   timer:apply_after(1000,os,cmd,[filename:join([InDir,TaskId++".sh"])]),
   -1.
 
 
-execute(TaskId,Cmd,InDir,NumNodes,ProcPerNode,WallTimeHrs,PidTimeoutS,TimeoutS,Backend,LogF) ->
+-spec execute([atom()|tuple()],fun()) -> {success,integer()}|{running,pos_integer(),integer()}.
+execute(Args,LogF) ->
+  case check_missing_args(Args) of
+    [] ->
+      ok;
+    Missing ->
+      throw({missing_arguments, Missing})
+  end,
+  InDir = proplists:get_value(in_dir, Args),
+  TaskId = proplists:get_value(task_id, Args),
+  PidTimeoutS = proplists:get_value(pid_timeout_s, Args),
+  TimeoutS = proplists:get_value(job_timeout_s, Args),
+  Backend = proplists:get_value(hpc_backend, Args),
   [PidPath,ExitCodePath,SubmitPath] = steward_utils:make_proc_names(InDir,TaskId,[".pid",".exitcode",".submit"]),
   case steward_utils:read_exitcode_file(ExitCodePath) of
     {ExitCode,ExitTime} ->
@@ -112,13 +149,27 @@ execute(TaskId,Cmd,InDir,NumNodes,ProcPerNode,WallTimeHrs,PidTimeoutS,TimeoutS,B
               LogF(info, "~s: already submitted ~w, waiting ~p s more for job start", [TaskId,SubmitTime,RemPidTimeoutS]),
               begin_monitoring(InDir,TaskId,QueueId,RemPidTimeoutS*1000,TimeoutS*1000,LogF);
             invalid ->
-              JS = build_job_script(TaskId,InDir,Cmd,NumNodes,ProcPerNode,WallTimeHrs,Backend),
+              JS = build_job_script(Args,Backend),
               steward_utils:write_run_script(steward_utils:make_proc_file_path(InDir,TaskId,".sh"),JS),
               QueueId = submit_job(InDir,TaskId,Backend),
               file:write_file(SubmitPath,io_lib:format("~p~n~p~n", [QueueId,steward_utils:unix_timestamp()])),
               begin_monitoring(InDir,TaskId,QueueId,PidTimeoutS*1000,TimeoutS*1000,LogF)
           end
       end
+  end.
+
+
+-spec check_missing_args([atom()|tuple()]) -> [atom()].
+check_missing_args(Args) ->
+  M0 = lists:filter(fun (K) -> not proplists:is_defined(K,Args) end,
+                    [task_id,in_dir,pid_timeout_s,job_timeout_s,hpc_backend,
+                     mpi_path,wall_time_hrs,proc_per_node,num_nodes]),
+  % exception: if the backend is null (direct execution of mpiexec) then wall_time_hrs is not needed
+  case proplists:get_value(hpc_backend,Args) of
+    null ->
+      lists:delete(wall_time_hrs,M0);
+    _ ->
+      M0
   end.
 
 
@@ -130,13 +181,27 @@ execute_null_success_test() ->
   file:delete("sleeper.exitcode"),
   file:write_file("sleeper_file.sh", "#!/usr/bin/env bash\nsleep 1\nexit 0"),
   file:change_mode("sleeper_file.sh",448),   % 448=700 octal
-  {running,Pid,-1} = execute("sleeper","./sleeper_file.sh",".",1,1,2,2,10,null,
+  {running,Pid,-1} = execute([{task_id,"sleeper"},{cmd,"./sleeper_file.sh"},{in_dir,"."},
+                              {num_nodes,1},{proc_per_node,1},{pid_timeout_s,2},{job_timeout_s,3},
+                              {hpc_backend,null},{mpi_path,"mpiexec"}],
                              fun(I,T,A) -> io:format("~p " ++ T ++ "\n", [I|A]) end),
   receive
-    {proc_terminated,Pid,{success,0}} ->
-      ok
+    {proc_started,Pid,_} ->
+      ok;
+    A ->
+      io:format("received incorrect message (instead of proc_started) ~p~n",[A]),
+      ?assert(false)
   after 3000 ->
-    ?assert(false) 
+      ?assert(false)
+  end,
+  receive
+    {proc_terminated,Pid,{success,0}} ->
+      ok;
+    B ->
+      io:format("received incorrect message (instead of proc_terminated): ~p~n", [B]),
+      ?assert(false)
+  after 3000 ->
+    ?assert(false)
   end,
   file:delete("sleeper.submit"),
   file:delete("sleeper.pid"),
@@ -150,12 +215,17 @@ execute_null_pid_timeout_test() ->
   file:delete("sleeper1.exitcode"),
   file:write_file("sleeper_file1.sh", "#!/usr/bin/env bash\nsleep 1\nexit 0"),
   file:change_mode("sleeper_file1.sh",448),   % 448=700 octal
-  {running,Pid,-1} = execute("sleeper1","sleep 5\n./sleeper_file1.sh",".",1,1,2,2,10,null,
+  {running,Pid,-1} = execute([{task_id,"sleeper1"},{cmd,"sleep 5\n./sleeper_file1.sh"},{in_dir,"."},
+                              {num_nodes,1},{proc_per_node,1},{pid_timeout_s,2},{job_timeout_s,2},
+                              {hpc_backend,null},{mpi_path,"mpiexec"},{wall_time_hrs,1}],
                              fun(I,T,A) -> io:format("~p " ++ T ++ "\n", [I|A]) end),
   receive
     {proc_terminated,Pid,{failure, acquire_pid_timeout}} ->
-      ok
-  after 3000 ->
+      ok;
+    B ->
+      io:format("received incorrect message (instead of proc_terminated): ~p~n",[B]),
+      ?assert(false)
+  after 4000 ->
     ?assert(false) 
   end,
   file:delete("sleeper1.submit"),
@@ -171,11 +241,25 @@ execute_null_pid_exitcode_failure_test() ->
   file:delete("sleeper2.exitcode"),
   file:write_file("sleeper_file2.sh", "#!/usr/bin/env bash\nsleep 1\nexit 5"),
   file:change_mode("sleeper_file2.sh",448),   % 448=700 octal
-  {running,Pid,-1} = execute("sleeper2","./sleeper_file2.sh",".",1,1,2,2,6,null,
+  {running,Pid,-1} = execute([{task_id,"sleeper2"},{cmd,"./sleeper_file2.sh"},{in_dir,"."},
+                              {num_nodes,1},{proc_per_node,1},{pid_timeout_s,2},{job_timeout_s,3},
+                              {hpc_backend,null},{mpi_path,"mpiexec"}],
                              fun(I,T,A) -> io:format("~p " ++ T ++ "\n", [I|A]) end),
   receive
+    {proc_started,Pid,_} ->
+      ok;
+    A ->
+      io:format("~p~n",[A]),
+      ?assert(false)
+  after 3000 ->
+    ?assert(false)
+  end,
+  receive
     {proc_terminated,Pid,{success,5}} ->
-      ok
+      ok;
+    B ->
+      io:format("recieved incorrect message: ~p~n", [B]),
+      ?assert(false)
   after 3000 ->
     ?assert(false) 
   end,
@@ -192,11 +276,25 @@ execute_null_pid_exec_timeout_test() ->
   file:delete("sleeper3.exitcode"),
   file:write_file("sleeper_file3.sh", "#!/usr/bin/env bash\nsleep 5\nexit 0"),
   file:change_mode("sleeper_file3.sh",448),   % 448=700 octal
-  {running,Pid,-1} = execute("sleeper3","./sleeper_file3.sh",".",1,1,2,2,2,null,
+  {running,Pid,-1} = execute([{task_id,"sleeper3"},{cmd,"./sleeper_file3.sh"},{in_dir,"."},
+                              {num_nodes,1},{proc_per_node,1},{pid_timeout_s,2},{job_timeout_s,2},
+                              {hpc_backend,null},{mpi_path,"mpiexec"},{wall_time_hrs,1}],
                              fun(I,T,A) -> io:format("~p " ++ T ++ "\n", [I|A]) end),
   receive
+    {proc_started,Pid,_} ->
+      ok;
+    A ->
+      io:format("received incorrect message instead of proc_started: ~p~n",[A]),
+      ?assert(false)
+  after 3000 ->
+    ?assert(false)
+  end,
+  receive
     {proc_terminated,Pid,{failure,timeout}} ->
-      ok
+      ok;
+    B ->
+      io:format("received incorrect message instead of proc_terminated: ~p~n", [B]),
+      ?assert(false)
   after 3000 ->
     ?assert(false) 
   end,
