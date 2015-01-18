@@ -42,13 +42,16 @@ extract_unique_tvars(S) ->
       lists:usort(lists:map(fun ([_, N]) -> N end, Captures))
   end.
 
+
 render_to_string(V) when is_list(V) -> V;
 render_to_string(V) -> io_lib:format("~p", [V]).
+
 
 replace_tvar(TVar,Templ,Args) ->
   N = tvar_string_to_atom(TVar),
   ValStr = render_to_string(proplists:get_value(N, Args)),
   re:replace(Templ, TVar, ValStr, [global, {return, list}]).
+
 
 build_job_script(Args0, Profile) ->
 
@@ -94,8 +97,8 @@ execute(Args,LogF) ->
   TaskId = proplists:get_value(task_id, Args),
   PidTimeoutS = proplists:get_value(pid_timeout_s, Args),
   TimeoutS = proplists:get_value(job_timeout_s, Args),
-  Backend = proplists:get_value(hpc_backend, Args),
-  {ok,Profile} = file:consult("etc/steward-profiles/" ++ Backend),
+  ProfileName = proplists:get_value(hpc_profile, Args),
+  {ok,Profile} = file:consult("etc/steward-profiles/" ++ ProfileName),
   [PidPath,ExitCodePath,SubmitPath] = steward_utils:make_proc_names(InDir,TaskId,[".pid",".exitcode",".submit"]),
   case steward_utils:read_exitcode_file(ExitCodePath) of
     {ExitCode,ExitTime} ->
@@ -131,10 +134,10 @@ execute(Args,LogF) ->
 -spec check_missing_args([atom()|tuple()]) -> [atom()].
 check_missing_args(Args) ->
   M0 = lists:filter(fun (K) -> not proplists:is_defined(K,Args) end,
-                    [task_id,in_dir,pid_timeout_s,job_timeout_s,hpc_backend,
+                    [task_id,in_dir,pid_timeout_s,job_timeout_s,hpc_profile,
                      wall_time_hrs,wall_time_mins,proc_per_node,num_nodes]),
-  % exception: if the backend is null (direct execution of mpiexec) then wall_time_hrs is not needed
-  case proplists:get_value(hpc_backend,Args) of
+  % exception: if the profile is null (direct execution of mpiexec) then wall_time_hrs is not needed
+  case proplists:get_value(hpc_profile,Args) of
     null ->
       lists:delete(wall_time_hrs,M0);
     _ ->
@@ -152,7 +155,7 @@ execute_null_success_test() ->
   file:change_mode("sleeper_file.sh",448),   % 448=700 octal
   {running,Pid,-1} = execute([{task_id,"sleeper"},{cmd,"./sleeper_file.sh"},{in_dir,"."},
                               {num_nodes,1},{proc_per_node,1},{pid_timeout_s,2},{job_timeout_s,3},
-                              {hpc_backend,null},{mpi_path,"mpiexec"}],
+                              {hpc_profile,null},{mpi_path,"mpiexec"}],
                              fun(I,T,A) -> io:format("~p " ++ T ++ "\n", [I|A]) end),
   receive
     {proc_started,Pid,_} ->
@@ -186,7 +189,7 @@ execute_null_pid_timeout_test() ->
   file:change_mode("sleeper_file1.sh",448),   % 448=700 octal
   {running,Pid,-1} = execute([{task_id,"sleeper1"},{cmd,"sleep 5\n./sleeper_file1.sh"},{in_dir,"."},
                               {num_nodes,1},{proc_per_node,1},{pid_timeout_s,2},{job_timeout_s,2},
-                              {hpc_backend,null},{mpi_path,"mpiexec"},{wall_time_hrs,1}],
+                              {hpc_profile,null},{mpi_path,"mpiexec"},{wall_time_hrs,1}],
                              fun(I,T,A) -> io:format("~p " ++ T ++ "\n", [I|A]) end),
   receive
     {proc_terminated,Pid,{failure, acquire_pid_timeout}} ->
@@ -212,7 +215,7 @@ execute_null_pid_exitcode_failure_test() ->
   file:change_mode("sleeper_file2.sh",448),   % 448=700 octal
   {running,Pid,-1} = execute([{task_id,"sleeper2"},{cmd,"./sleeper_file2.sh"},{in_dir,"."},
                               {num_nodes,1},{proc_per_node,1},{pid_timeout_s,2},{job_timeout_s,3},
-                              {hpc_backend,null},{mpi_path,"mpiexec"}],
+                              {hpc_profile,null},{mpi_path,"mpiexec"}],
                              fun(I,T,A) -> io:format("~p " ++ T ++ "\n", [I|A]) end),
   receive
     {proc_started,Pid,_} ->
@@ -247,7 +250,7 @@ execute_null_pid_exec_timeout_test() ->
   file:change_mode("sleeper_file3.sh",448),   % 448=700 octal
   {running,Pid,-1} = execute([{task_id,"sleeper3"},{cmd,"./sleeper_file3.sh"},{in_dir,"."},
                               {num_nodes,1},{proc_per_node,1},{pid_timeout_s,2},{job_timeout_s,2},
-                              {hpc_backend,null},{mpi_path,"mpiexec"},{wall_time_hrs,1}],
+                              {hpc_profile,null},{mpi_path,"mpiexec"},{wall_time_hrs,1}],
                              fun(I,T,A) -> io:format("~p " ++ T ++ "\n", [I|A]) end),
   receive
     {proc_started,Pid,_} ->
