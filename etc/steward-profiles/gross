@@ -1,0 +1,15 @@
+{submit_command_template, "qsub %%scriptpath%%"}.
+{job_script_template,
+"#$ -S /bin/bash
+#$ -N %%taskid%%
+#$ -wd %%workdir%%
+#$ -l h_rt=%%walltimehrs%%:%%walltimemins%%:00
+#$ -pe mpich %%np%%
+TID=%%taskid%%
+mpirun_rsh -np %%np%% -hostfile $TMPDIR/machines %%execpath%% &
+PID=$!
+echo $PID `date +%s` > $TID.pid
+wait $PID
+echo $? `date +%s` > $TID.exitcode
+"}.
+

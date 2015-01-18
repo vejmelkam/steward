@@ -25,106 +25,61 @@ begin_monitoring(InDir,TaskId,QueueId,PidTimeoutMS,TimeoutMS,LogF) ->
   {running,Pid,QueueId}.
 
 
-build_job_script(Args,null) ->
-  NumNodes = proplists:get_value(num_nodes, Args),
-  ProcPerNode = proplists:get_value(proc_per_node, Args),
-  InDir = proplists:get_value(in_dir, Args),
-  TaskId = proplists:get_value(task_id, Args),
-  Cmd = proplists:get_value(cmd, Args),
-  MpiPath = proplists:get_value(mpi_path, Args),
-  MpiExtraParams = proplists:get_value(mpi_extra_params, Args, []),
-  PreLines = proplists:get_value(jobscript_pre_mpiexec, Args, []),
-  PostLines = proplists:get_value(jobscript_post_mpiexec, Args, []),
-  NP = NumNodes*ProcPerNode,
-  lists:flatten([
-    "#!/usr/bin/env bash\n",
-    "cd ",InDir,"\n",
-    "TID=",TaskId,"\n",
-    PreLines,
-    MpiPath, " ", MpiExtraParams, " -np ", integer_to_list(NP), " ", Cmd," &\n",
-    PostLines,
-    "PID=$!\n",
-    "echo $PID `date +%s` > $TID.pid\n",
-    "wait $PID\n",
-    "echo $? `date +%s` > $TID.exitcode\n"]);
+tvar_string_to_atom("%%numnodes%%") -> num_nodes;
+tvar_string_to_atom("%%ppn%%") -> proc_per_node;
+tvar_string_to_atom("%%workdir%%") -> in_dir;
+tvar_string_to_atom("%%taskid%%") -> task_id;
+tvar_string_to_atom("%%execpath%%") -> cmd;
+tvar_string_to_atom("%%walltimehrs%%") -> wall_time_hrs;
+tvar_string_to_atom("%%walltimemins%%") -> wall_time_mins;
+tvar_string_to_atom("%%np%%") -> np.
 
+extract_unique_tvars(S) ->
+  {ok,MP} = re:compile("(%%[^%]+%%)"),
+  case re:run(S, MP, [global, {capture, all, list}]) of
+    nomatch -> [];
+    {match, Captures} ->
+      lists:usort(lists:map(fun ([_, N]) -> N end, Captures))
+  end.
 
-build_job_script(Args,pbs) ->
-  NumNodes = proplists:get_value(num_nodes, Args),
-  ProcPerNode = proplists:get_value(proc_per_node, Args),
-  InDir = proplists:get_value(in_dir, Args),
-  TaskId = proplists:get_value(task_id, Args),
-  Cmd = proplists:get_value(cmd, Args),
-  MpiPath = proplists:get_value(mpi_path, Args),
-  MpiExtraParams = proplists:get_value(mpi_extra_params, Args, []),
-  WallTimeHrs = proplists:get_value(wall_time_hrs, Args),
-  PreLines = proplists:get_value(jobscript_pre_mpiexec, Args, []),
-  PostLines = proplists:get_value(jobscript_post_mpiexec, Args, []),
+render_to_string(V) when is_list(V) -> V;
+render_to_string(V) -> io_lib:format("~p", [V]).
+
+replace_tvar(TVar,Templ,Args) ->
+  N = tvar_string_to_atom(TVar),
+  ValStr = render_to_string(proplists:get_value(N, Args)),
+  re:replace(Templ, TVar, ValStr, [global, {return, list}]).
+
+build_job_script(Args0, Profile) ->
+
+  Templ = proplists:get_value(job_script_template, Profile),
+
+  % these are guaranteed to be present
+  NumNodes = proplists:get_value(num_nodes, Args0),
+  ProcPerNode = proplists:get_value(proc_per_node, Args0),
+
+  % ensure that numprocs is present and correctly computed for the given nodes/ppn
   NP = NumNodes * ProcPerNode,
-  lists:flatten([
-    "#!/usr/bin/env bash\n",
-    io_lib:format("#PBS -l nodes=~p:ppn=~p\n", [NumNodes,ProcPerNode]),
-    io_lib:format("#PBS -l walltime=~p:00:00\n", [WallTimeHrs]),
-    "#PBS -N ", TaskId, "\n",
-    "TID=",TaskId,"\n",
-    "cd ",InDir,"\n",
-    PreLines,
-    MpiPath, " ", MpiExtraParams, " -np ", integer_to_list(NP), " ", Cmd, " &\n",
-    PostLines,
-    "PID=$!\n",
-    "echo $PID `date +%s` > $TID.pid\n",
-    "wait $PID\n",
-    "echo $? `date +%s` > $TID.exitcode\n"]);
+  Args = [{np,NP}|Args0],
 
-build_job_script(Args,sge) ->
-  NumNodes = proplists:get_value(num_nodes, Args),
-  ProcPerNode = proplists:get_value(proc_per_node, Args),
-  InDir = proplists:get_value(in_dir, Args),
-  TaskId = proplists:get_value(task_id, Args),
-  Cmd = proplists:get_value(cmd, Args),
-  MpiPath = proplists:get_value(mpi_path, Args),
-  MpiExtraParams = proplists:get_value(mpi_extra_params, Args, []),
-  WallTimeHrs = proplists:get_value(wall_time_hrs, Args),
-  PreLines = proplists:get_value(jobscript_pre_mpiexec, Args, []),
-  PostLines = proplists:get_value(jobscript_post_mpiexec, Args, []),
-  NP = NumNodes*ProcPerNode,
-  lists:flatten([
-     "#$ -S /bin/bash\n",
-     "#$ -N ",TaskId,"\n",
-     "#$ -wd ",InDir,"\n",
-     "#$ -l h_rt=",integer_to_list(WallTimeHrs),":00:00\n",
-     "#$ -pe mpi ",integer_to_list(NP),"\n",
-     "TID=",TaskId,"\n",
-     "cp $PE_HOSTFILE pe_hostfile\n",
-     "awk '{for (i=1;i<=$2;i++) print $1}' pe_hostfile > machinefile\n",
-     PreLines,
-     MpiPath," ",MpiExtraParams," -np ",integer_to_list(NP)," -machinefile machinefile ",Cmd," &\n",
-     PostLines,
-     "PID=$!\n",
-     "echo $PID `date +%s` > $TID.pid\n",
-     "wait $PID\n",
-     "echo $? `date +%s` > $TID.exitcode\n" ]).
+  % retrieve all unique variable requests from the template
+  Vars = extract_unique_tvars(Templ),
+
+  % for each variable, replace its occurrence with the associated value
+  lists:foldl(fun (TVar, Acc) -> replace_tvar(TVar, Acc, Args) end, Templ, Vars).
 
 
-strip_qid(QidLine,_Backend) ->
+-spec submit_job([atom()|tuple()],[atom()|tuple()]) -> integer().
+submit_job(Args,Profile) ->
+  SubmitCmd = proplists:get_value(submit_command_template, Profile),
+  Command = re:replace("%%scriptpath%%", proplists:get_value(script_path, Args), SubmitCmd, [global, {return, list}]),
+  QidLine = lists:flatten(os:cmd(lists:flatten(Command))),
   case re:run(QidLine, "([0-9]+)", [{capture,first,list}]) of
     {match, [QidStr]} ->
       list_to_integer(QidStr);
     error ->
       -1
    end.
-
-
-submit_job(InDir,TaskId,pbs) ->
-  QidLine = lists:flatten(os:cmd(lists:flatten(["cd ",InDir," && qsub ",TaskId,".sh"]))),
-  strip_qid(QidLine,pbs);
-submit_job(InDir,TaskId,sge) ->
-  QidLine = lists:flatten(os:cmd(lists:flatten(["cd ",InDir," && qsub ",TaskId,".sh"]))),
-  strip_qid(QidLine,sge);
-submit_job(InDir,TaskId,null) ->
-  % simulates submission by delaying the execution of the task script by 2 seconds
-  timer:apply_after(1000,os,cmd,[filename:join([InDir,TaskId++".sh"])]),
-  -1.
 
 
 -spec execute([atom()|tuple()],fun()) -> {success,integer()}|{running,pos_integer(),integer()}.
@@ -140,6 +95,7 @@ execute(Args,LogF) ->
   PidTimeoutS = proplists:get_value(pid_timeout_s, Args),
   TimeoutS = proplists:get_value(job_timeout_s, Args),
   Backend = proplists:get_value(hpc_backend, Args),
+  {ok,Profile} = file:consult("etc/steward-profiles/" ++ Backend),
   [PidPath,ExitCodePath,SubmitPath] = steward_utils:make_proc_names(InDir,TaskId,[".pid",".exitcode",".submit"]),
   case steward_utils:read_exitcode_file(ExitCodePath) of
     {ExitCode,ExitTime} ->
@@ -161,9 +117,10 @@ execute(Args,LogF) ->
               LogF(info, "~s: already submitted ~w, waiting ~p s more for job start", [TaskId,SubmitTime,RemPidTimeoutS]),
               begin_monitoring(InDir,TaskId,QueueId,RemPidTimeoutS*1000,TimeoutS*1000,LogF);
             invalid ->
-              JS = build_job_script(Args,Backend),
-              steward_utils:write_run_script(steward_utils:make_proc_file_path(InDir,TaskId,".sh"),JS),
-              QueueId = submit_job(InDir,TaskId,Backend),
+              JS = build_job_script(Args,Profile),
+              ScriptPath = steward_utils:make_proc_file_path(InDir,TaskId,".sh"),
+              steward_utils:write_run_script(ScriptPath,JS),
+              QueueId = submit_job([{script_path,ScriptPath}|Args],Profile),
               file:write_file(SubmitPath,io_lib:format("~p~n~p~n", [QueueId,steward_utils:unix_timestamp()])),
               begin_monitoring(InDir,TaskId,QueueId,PidTimeoutS*1000,TimeoutS*1000,LogF)
           end
@@ -175,7 +132,7 @@ execute(Args,LogF) ->
 check_missing_args(Args) ->
   M0 = lists:filter(fun (K) -> not proplists:is_defined(K,Args) end,
                     [task_id,in_dir,pid_timeout_s,job_timeout_s,hpc_backend,
-                     mpi_path,wall_time_hrs,proc_per_node,num_nodes]),
+                     wall_time_hrs,wall_time_mins,proc_per_node,num_nodes]),
   % exception: if the backend is null (direct execution of mpiexec) then wall_time_hrs is not needed
   case proplists:get_value(hpc_backend,Args) of
     null ->
