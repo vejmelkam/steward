@@ -74,8 +74,8 @@ build_job_script(Args0, Profile) ->
 
 -spec submit_job([atom()|tuple()],[atom()|tuple()]) -> integer().
 submit_job(Args,Profile) ->
-  SubmitCmd = proplists:get_value(submit_command_template, Profile),
-  Command = re:replace("%%scriptpath%%", proplists:get_value(script_path, Args), SubmitCmd, [global, {return, list}]),
+  SubmitTempl = proplists:get_value(submit_command_template, Profile),
+  Command = re:replace(SubmitTempl,"%%scriptpath%%", proplists:get_value(script_path, Args), [global, {return, list}]),
   QidLine = lists:flatten(os:cmd(lists:flatten(Command))),
   case re:run(QidLine, "([0-9]+)", [{capture,first,list}]) of
     {match, [QidStr]} ->
